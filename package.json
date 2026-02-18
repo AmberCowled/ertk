@@ -1,0 +1,66 @@
+{
+	"name": "ertk",
+	"version": "0.1.0",
+	"description": "Easy RTK — Define endpoints once, generate RTK Query hooks and route handlers automatically",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./next": {
+			"types": "./dist/next/index.d.ts",
+			"import": "./dist/next/index.js"
+		}
+	},
+	"bin": {
+		"ertk": "./dist/cli.js"
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"prepublishOnly": "tsc"
+	},
+	"keywords": [
+		"rtk",
+		"redux",
+		"rtk-query",
+		"codegen",
+		"next.js",
+		"api",
+		"endpoints"
+	],
+	"license": "MIT",
+	"dependencies": {
+		"jiti": "^2.4.2",
+		"ts-morph": "^27.0.2"
+	},
+	"peerDependencies": {
+		"@reduxjs/toolkit": "^2.0.0",
+		"next": ">=14.0.0",
+		"react": ">=18.0.0",
+		"react-redux": "^9.0.0",
+		"typescript": "^5.0.0",
+		"zod": "^3.0.0 || ^4.0.0"
+	},
+	"peerDependenciesMeta": {
+		"next": {
+			"optional": true
+		},
+		"zod": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@reduxjs/toolkit": "^2.5.0",
+		"@types/node": "^22.0.0",
+		"next": "^16.0.0",
+		"react": "^19.0.0",
+		"react-redux": "^9.2.0",
+		"typescript": "^5.0.0",
+		"zod": "^4.0.0"
+	}
+}
