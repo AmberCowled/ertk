@@ -14,7 +14,7 @@
 		}
 	},
 	"bin": {
-		"ertk": "./dist/cli.js"
+		"ertk": "dist/cli.js"
 	},
 	"files": [
 		"dist"
@@ -37,7 +37,7 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/AmberCowled/ertk.git"
+		"url": "git+https://github.com/AmberCowled/ertk.git"
 	},
 	"homepage": "https://github.com/AmberCowled/ertk#readme",
 	"bugs": {
