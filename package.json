@@ -1,6 +1,6 @@
 {
 	"name": "ertk",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Easy RTK — Define endpoints once, generate RTK Query hooks and route handlers automatically",
 	"type": "module",
 	"exports": {

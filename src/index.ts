@@ -1,6 +1,6 @@
 // Core
 export { endpoint } from "./endpoint.js";
-export { defineConfig } from "./config.js";
+export { defineConfig } from "./define-config.js";
 
 // Types
 export type {
