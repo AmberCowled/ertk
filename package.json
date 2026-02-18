@@ -33,7 +33,16 @@
 		"api",
 		"endpoints"
 	],
+	"author": "Amber Cowled",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/AmberCowled/ertk.git"
+	},
+	"homepage": "https://github.com/AmberCowled/ertk#readme",
+	"bugs": {
+		"url": "https://github.com/AmberCowled/ertk/issues"
+	},
 	"dependencies": {
 		"jiti": "^2.4.2",
 		"ts-morph": "^27.0.2"
