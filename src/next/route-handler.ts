@@ -7,6 +7,12 @@
  */
 
 import type { EndpointDefinition } from "../types.js";
+import {
+	defaultKeyFn,
+	InMemoryRateLimitAdapter,
+	type RateLimitAdapter,
+	type RateLimitConfig,
+} from "./rate-limit.js";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -41,6 +47,13 @@ export interface ConfigureHandlerOptions {
 
 	/** Custom error handlers, processed in order. First non-null response wins. */
 	errorHandlers?: ErtkErrorHandler[];
+
+	/**
+	 * Global rate limiting configuration.
+	 * Applied to all endpoints unless overridden per-endpoint.
+	 * Omit to disable rate limiting entirely.
+	 */
+	rateLimit?: RateLimitConfig;
 }
 
 // ─── Validation Error ─────────────────────────────────────────
@@ -138,6 +151,51 @@ function errorResponse(message: string, status: number): Response {
 	return jsonResponse({ error: message }, status);
 }
 
+// ─── Rate Limiting ────────────────────────────────────────────
+
+let defaultAdapter: RateLimitAdapter | null = null;
+function getDefaultAdapter(): RateLimitAdapter {
+	if (!defaultAdapter) {
+		defaultAdapter = new InMemoryRateLimitAdapter();
+	}
+	return defaultAdapter;
+}
+
+async function applyRateLimit(
+	req: Request,
+	user: { id: string } | undefined,
+	globalConfig: RateLimitConfig | undefined,
+	endpointOverride: { windowMs: number; max: number } | undefined,
+): Promise<Response | null> {
+	if (!globalConfig && !endpointOverride) return null;
+
+	const windowMs = endpointOverride?.windowMs ?? globalConfig!.windowMs;
+	const max = endpointOverride?.max ?? globalConfig!.max;
+	const keyFn = globalConfig?.keyFn ?? defaultKeyFn;
+	const adapter = globalConfig?.adapter ?? getDefaultAdapter();
+
+	const key = keyFn(req, user);
+	const result = await adapter.check(key, windowMs, max);
+
+	if (!result.allowed) {
+		const retryAfter = Math.ceil(
+			(result.resetAt * 1000 - Date.now()) / 1000,
+		);
+		return new Response(JSON.stringify({ error: "Too many requests" }), {
+			status: 429,
+			headers: {
+				"Content-Type": "application/json",
+				"Retry-After": String(Math.max(1, retryAfter)),
+				"X-RateLimit-Limit": String(result.limit),
+				"X-RateLimit-Remaining": "0",
+				"X-RateLimit-Reset": String(result.resetAt),
+			},
+		});
+	}
+
+	return null;
+}
+
 // ─── Route Handler Factory ───────────────────────────────────
 
 /**
@@ -199,6 +257,17 @@ export function configureHandler(options: ConfigureHandlerOptions = {}) {
 					if (!user) {
 						return errorResponse("Unauthorized", 401);
 					}
+				}
+
+				// Rate limiting
+				if (options.rateLimit || def.rateLimit) {
+					const rateLimitResponse = await applyRateLimit(
+						req,
+						user as { id: string } | undefined,
+						options.rateLimit,
+						def.rateLimit,
+					);
+					if (rateLimitResponse) return rateLimitResponse;
 				}
 
 				// Call the endpoint handler

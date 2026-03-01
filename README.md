@@ -18,6 +18,8 @@ ERTK is a TypeScript code generation tool that eliminates the boilerplate of wri
 - **Watch mode** — Watches endpoint files and regenerates on save with 300ms debouncing
 - **Path alias detection** — Auto-reads `tsconfig.json` paths to generate correct import paths
 - **Custom error handlers** — Chainable error handlers for ORM-specific or domain errors
+- **Per-endpoint retries** — Configurable `maxRetries` with exponential backoff via RTK Query's native `retry` utility
+- **Server-side rate limiting** — Pluggable rate limiting for route handlers with in-memory default and adapter interface for distributed stores (Redis, Upstash, etc.)
 
 ## Installation
 
@@ -238,6 +240,8 @@ Each file should have a single `default export` of an endpoint definition.
 | `request` | `ValidationSchema` | — | Request validation schema (Zod, Valibot, etc.) |
 | `tags` | `{ provides?, invalidates? }` | — | RTK Query cache tag configuration |
 | `optimistic` | `SingleOptimistic \| MultiOptimistic` | — | Optimistic update configuration |
+| `maxRetries` | `number` | — | Max client-side retry attempts for transient failures (5xx, network errors) |
+| `rateLimit` | `{ windowMs: number; max: number }` | — | Per-endpoint server-side rate limit override |
 | `handler` | `(ctx) => Promise<unknown>` | — | Server-side handler (omit for client-only endpoints) |
 
 ### GET Endpoint (Query)
@@ -308,6 +312,51 @@ export default endpoint.get<WeatherData, { city: string }>({
 ```
 
 Client-only endpoints (no `handler`) are excluded from route generation but are still included in the generated RTK Query API.
+
+### Retries
+
+Add `maxRetries` to any endpoint to automatically retry on transient failures (5xx, network errors, 408, 429). ERTK uses RTK Query's built-in `retry` utility with exponential backoff.
+
+```typescript
+// src/endpoints/user/xp/get.ts
+import { endpoint } from "ertk";
+import type { GetXPResponse } from "@app/types/xp";
+
+export default endpoint.get<GetXPResponse, void>({
+  name: "getXP",
+  tags: { provides: ["XP"] },
+  protected: true,
+  maxRetries: 2,
+  query: () => "/user/xp",
+  handler: async ({ user }) => {
+    const xp = await getXP(user.id);
+    return { xp };
+  },
+});
+```
+
+With `maxRetries: 2`, the client will make up to 3 total attempts (1 initial + 2 retries) with exponential backoff. Only transient errors trigger retries — 4xx client errors (400, 401, 403, 404) are never retried.
+
+When any endpoint uses `maxRetries`, the generated `api.ts` wraps the base query with RTK Query's `retry()` utility and emits `extraOptions` on the relevant endpoints:
+
+```typescript
+// Generated api.ts
+import { createApi, fetchBaseQuery, retry } from "@reduxjs/toolkit/query/react";
+
+export const api = createApi({
+  reducerPath: "api",
+  baseQuery: retry(fetchBaseQuery({ baseUrl: "/api" }), { maxRetries: 0 }),
+  endpoints: (builder) => ({
+    getXP: builder.query<GetXPResponse, void>({
+      query: () => "/user/xp",
+      providesTags: ["XP"],
+      extraOptions: { maxRetries: 2 },
+    }),
+  }),
+});
+```
+
+Endpoints without `maxRetries` are unaffected — the global default is 0 retries. If no endpoint uses retries, the generated output is identical to the standard `fetchBaseQuery` without `retry`.
 
 ### File Structure and Route Mapping
 
@@ -481,6 +530,94 @@ Error handlers are processed in order. The first handler to return a non-null `R
 1. `ValidationError` → 400 with validation details
 2. Errors with a numeric `status` property → uses that status code
 3. All other errors → 500 with generic message (details logged server-side)
+
+### Rate Limiting
+
+ERTK provides server-side rate limiting for route handlers with a pluggable adapter system.
+
+#### Global Configuration
+
+Add a `rateLimit` option to `configureHandler()`:
+
+```typescript
+import { configureHandler } from "ertk/next";
+
+export const createRouteHandler = configureHandler({
+  auth: { /* ... */ },
+  rateLimit: {
+    windowMs: 60_000,  // 1 minute window
+    max: 100,          // 100 requests per window
+  },
+});
+```
+
+When a request exceeds the limit, ERTK returns a `429 Too Many Requests` response with a `Retry-After` header and standard rate limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`).
+
+#### Per-Endpoint Overrides
+
+Override the global `windowMs` and `max` on individual endpoints:
+
+```typescript
+export default endpoint.post<User, CreateUserInput>({
+  name: "createUser",
+  protected: false,
+  rateLimit: { windowMs: 60_000, max: 5 },  // Stricter limit for registration
+  // ...
+});
+```
+
+Per-endpoint overrides take priority over the global config. The `keyFn` and `adapter` always come from the global config (or defaults). You can also set `rateLimit` on an endpoint without configuring a global rate limit — it will use the default IP-based key function and in-memory adapter.
+
+#### Custom Key Function
+
+By default, rate limiting is keyed by client IP (from `x-forwarded-for` or `x-real-ip` headers). Provide a custom `keyFn` to key by authenticated user, API key, or any other identifier:
+
+```typescript
+export const createRouteHandler = configureHandler({
+  auth: { /* ... */ },
+  rateLimit: {
+    windowMs: 60_000,
+    max: 100,
+    keyFn: (req, user) => user?.id ?? defaultKeyFn(req),
+  },
+});
+```
+
+The `keyFn` receives the authenticated user when available (rate limiting runs after auth resolution).
+
+#### Custom Adapter
+
+The default `InMemoryRateLimitAdapter` uses a sliding window and is suitable for single-process deployments. For multi-instance or serverless deployments (e.g., Vercel), provide a distributed adapter:
+
+```typescript
+import { configureHandler, type RateLimitAdapter } from "ertk/next";
+
+class UpstashRateLimitAdapter implements RateLimitAdapter {
+  async check(key: string, windowMs: number, max: number) {
+    // Your Upstash/Redis implementation
+    return { allowed: true, limit: max, remaining: max - 1, resetAt: Date.now() / 1000 + windowMs / 1000 };
+  }
+}
+
+export const createRouteHandler = configureHandler({
+  rateLimit: {
+    windowMs: 60_000,
+    max: 100,
+    adapter: new UpstashRateLimitAdapter(),
+  },
+});
+```
+
+The `RateLimitAdapter` interface requires a single `check(key, windowMs, max)` method that returns a `Promise<RateLimitResult>`:
+
+```typescript
+interface RateLimitResult {
+  allowed: boolean;      // Whether the request is allowed
+  limit: number;         // Total limit for the window
+  remaining: number;     // Remaining requests in the current window
+  resetAt: number;       // Unix timestamp (seconds) when the window resets
+}
+```
 
 ### Request Parsing
 
@@ -673,6 +810,11 @@ Validation errors are caught by the route handler and returned as 400 responses 
 | `ErtkAuthAdapter` | `interface` | Auth adapter shape: `{ getUser(req) => Promise<User \| null> }` |
 | `ErtkErrorHandler` | `type` | Error handler: `(error) => Response \| null` |
 | `ConfigureHandlerOptions` | `interface` | Options for `configureHandler` |
+| `InMemoryRateLimitAdapter` | `class` | Sliding window rate limiter for single-process deployments |
+| `defaultKeyFn` | `(req) => string` | Extracts client IP from proxy headers |
+| `RateLimitAdapter` | `interface` | Adapter interface for custom storage backends |
+| `RateLimitConfig` | `interface` | Rate limit configuration (`windowMs`, `max`, `keyFn?`, `adapter?`) |
+| `RateLimitResult` | `interface` | Result of a rate limit check (`allowed`, `limit`, `remaining`, `resetAt`) |
 
 ### Types
 
@@ -711,6 +853,11 @@ Validation errors are caught by the route handler and returned as 400 responses 
 - **`refetchOnFocus` and `refetchOnReconnect` are hardcoded.** The generated API sets `refetchOnFocus: false` and `refetchOnReconnect: true`. These are not yet configurable via `ertk.config.ts`.
 - **No formatting of generated code.** Generated files use tabs and don't pass through Prettier or ESLint. Add generated paths to your formatter's include list if you want consistent style.
 - **No test suite.** The package does not currently include automated tests.
+
+### Rate Limiting
+
+- **In-memory adapter resets on process restart.** The default `InMemoryRateLimitAdapter` stores state in memory. It resets when the process restarts and is not shared across instances. For serverless or multi-instance deployments, use a distributed adapter (Redis, Upstash, etc.).
+- **Rate limiting runs after auth resolution.** This allows the `keyFn` to use the authenticated user for user-based rate limiting, but means auth work is performed before rate-limited requests are rejected.
 
 ## License
 

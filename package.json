@@ -1,6 +1,6 @@
 {
 	"name": "ertk",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Easy RTK — Define endpoints once, generate RTK Query hooks and route handlers automatically",
 	"type": "module",
 	"exports": {
@@ -42,6 +42,11 @@
 	"homepage": "https://github.com/AmberCowled/ertk#readme",
 	"bugs": {
 		"url": "https://github.com/AmberCowled/ertk/issues"
+	},
+	"pnpm": {
+		"overrides": {
+			"minimatch": ">=10.2.3"
+		}
 	},
 	"dependencies": {
 		"jiti": "^2.4.2",
