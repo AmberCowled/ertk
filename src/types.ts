@@ -106,6 +106,24 @@ export interface EndpointDefinition<TResponse = unknown, TArgs = void> {
 	optimistic?: SingleOptimistic<TArgs> | MultiOptimistic<TArgs>;
 
 	/**
+	 * Maximum number of retry attempts for transient failures (5xx, network errors, 408, 429).
+	 * Uses RTK Query's built-in `retry` utility with exponential backoff.
+	 * 0 or undefined means no retries. A value of 2 means up to 3 total attempts.
+	 * Client-side only — does not affect server-side route handlers.
+	 */
+	maxRetries?: number;
+
+	/**
+	 * Per-endpoint rate limit override for the server-side route handler.
+	 * Overrides the global `rateLimit` config from `configureHandler()`.
+	 * Only `windowMs` and `max` can be overridden; `keyFn` and `adapter` come from the global config.
+	 */
+	rateLimit?: {
+		windowMs: number;
+		max: number;
+	};
+
+	/**
 	 * Server-side handler. Optional — omit for client-only endpoints
 	 * that consume an external API.
 	 */
