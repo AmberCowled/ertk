@@ -528,7 +528,7 @@ export const createRouteHandler = configureHandler({
 Error handlers are processed in order. The first handler to return a non-null `Response` wins. If no handler matches, ERTK falls back to built-in handling:
 
 1. `ValidationError` → 400 with validation details
-2. Errors with a numeric `status` property → uses that status code
+2. Errors with a numeric `status` property → uses that status code with a generic message. To expose the error's own message to the client, set `expose: true` on the error (e.g., `Object.assign(new Error("Not found"), { status: 404, expose: true })`)
 3. All other errors → 500 with generic message (details logged server-side)
 
 ### Rate Limiting
@@ -623,7 +623,7 @@ interface RateLimitResult {
 
 ERTK automatically handles request parsing based on the HTTP method:
 
-- **GET, DELETE, HEAD, OPTIONS** — Parses `URLSearchParams` into an object (with automatic string-to-number coercion)
+- **GET, DELETE, HEAD, OPTIONS** — Parses `URLSearchParams` into a string-keyed object. All values are strings; use your validation schema (e.g., `z.coerce.number()`) for type coercion
 - **POST, PUT, PATCH** — Parses JSON request body
 
 If a `request` schema is provided on the endpoint, the parsed data is validated through `schema.parse()` before reaching the handler.
@@ -634,7 +634,7 @@ Every handler receives a context object:
 
 ```typescript
 interface HandlerContext<TBody, TQuery, TUser> {
-  user: TUser;        // Resolved user (from auth adapter)
+  user: TUser | null; // Resolved user (from auth adapter), or null for unprotected endpoints
   body: TBody;        // Parsed & validated request body
   query: TQuery;      // Parsed & validated query parameters
   params: Record<string, string>; // URL path parameters (Next.js dynamic segments)

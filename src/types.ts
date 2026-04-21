@@ -47,7 +47,7 @@ export interface HandlerContext<
 	TQuery = unknown,
 	TUser = DefaultUser,
 > {
-	user: TUser;
+	user: TUser | null;
 	body: TBody;
 	query: TQuery;
 	params: Record<string, string>;
