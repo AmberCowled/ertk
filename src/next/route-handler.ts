@@ -83,10 +83,9 @@ async function parseAndValidateRequest(
 		if (!schema) return { query: undefined };
 
 		const url = new URL(req.url);
-		const params: Record<string, string | number> = {};
+		const params: Record<string, string> = {};
 		url.searchParams.forEach((value, key) => {
-			const numValue = Number(value);
-			params[key] = Number.isNaN(numValue) ? value : numValue;
+			params[key] = value;
 		});
 
 		try {
@@ -245,7 +244,7 @@ export function configureHandler(options: ConfigureHandlerOptions = {}) {
 				);
 
 				// Resolve user for protected endpoints
-				let user: unknown = undefined;
+				let user: { id: string; [key: string]: unknown } | null = null;
 				if (def.protected) {
 					if (!options.auth) {
 						return errorResponse(
@@ -279,7 +278,7 @@ export function configureHandler(options: ConfigureHandlerOptions = {}) {
 				}
 
 				const result = await def.handler({
-					user: (user ?? { id: "" }) as any,
+					user: user ?? null,
 					body,
 					query,
 					params,
@@ -313,9 +312,13 @@ export function configureHandler(options: ConfigureHandlerOptions = {}) {
 					"status" in error &&
 					typeof (error as { status: unknown }).status === "number"
 				) {
+					const status = (error as { status: number }).status;
+					const isClientSafe =
+						"expose" in error &&
+						(error as { expose: unknown }).expose === true;
 					return errorResponse(
-						error.message || "An error occurred",
-						(error as { status: number }).status,
+						isClientSafe ? error.message : "An error occurred",
+						status,
 					);
 				}
 
