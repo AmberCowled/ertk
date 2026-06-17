@@ -287,7 +287,7 @@ function resolveToAlias(
 	const dir = path.dirname(fromFile);
 	const resolved = path.resolve(dir, moduleSpecifier);
 	if (resolved.startsWith(config.aliasRoot)) {
-		return `${config.pathAlias}/${path.relative(config.aliasRoot, resolved).replace(/\.ts$/, "")}`;
+		return `${config.pathAlias}/${path.relative(config.aliasRoot, resolved).replace(/\\/g, "/").replace(/\.ts$/, "")}`;
 	}
 	return moduleSpecifier;
 }
@@ -306,11 +306,7 @@ function addToMapSet(
 function deriveRoutePath(filePath: string, config: ResolvedConfig): string {
 	const parts = filePath.replace(/\.ts$/, "").split("/");
 	const fileName = parts.pop()!;
-	const segments: string[] = [];
-
-	for (const part of parts) {
-		segments.push(part);
-	}
+	const segments = [...parts];
 
 	if (!config.crudFilenames.has(fileName)) {
 		segments.push(fileName);

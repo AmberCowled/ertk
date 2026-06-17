@@ -14,13 +14,6 @@ const DEFAULT_CRUD_FILENAMES = [
 ];
 
 /**
- * Helper for defining an ERTK config with type checking.
- */
-export function defineConfig(config: ErtkConfig): ErtkConfig {
-	return config;
-}
-
-/**
  * Load the ERTK config file from the project root.
  * Searches for ertk.config.ts, ertk.config.mts, ertk.config.js, ertk.config.mjs.
  */
