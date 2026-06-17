@@ -162,7 +162,7 @@ function getDefaultAdapter(): RateLimitAdapter {
 
 async function applyRateLimit(
 	req: Request,
-	user: { id: string } | undefined,
+	user: { id: string } | null | undefined,
 	globalConfig: RateLimitConfig | undefined,
 	endpointOverride: { windowMs: number; max: number } | undefined,
 ): Promise<Response | null> {
@@ -173,7 +173,7 @@ async function applyRateLimit(
 	const keyFn = globalConfig?.keyFn ?? defaultKeyFn;
 	const adapter = globalConfig?.adapter ?? getDefaultAdapter();
 
-	const key = keyFn(req, user);
+	const key = keyFn(req, user ?? undefined);
 	const result = await adapter.check(key, windowMs, max);
 
 	if (!result.allowed) {
@@ -262,7 +262,7 @@ export function configureHandler(options: ConfigureHandlerOptions = {}) {
 				if (options.rateLimit || def.rateLimit) {
 					const rateLimitResponse = await applyRateLimit(
 						req,
-						user as { id: string } | undefined,
+						user,
 						options.rateLimit,
 						def.rateLimit,
 					);

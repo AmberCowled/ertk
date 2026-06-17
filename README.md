@@ -811,7 +811,7 @@ Validation errors are caught by the route handler and returned as 400 responses 
 | `ErtkErrorHandler` | `type` | Error handler: `(error) => Response \| null` |
 | `ConfigureHandlerOptions` | `interface` | Options for `configureHandler` |
 | `InMemoryRateLimitAdapter` | `class` | Sliding window rate limiter for single-process deployments |
-| `defaultKeyFn` | `(req) => string` | Extracts client IP from proxy headers |
+| `defaultKeyFn` | `(req, user?) => string` | Extracts client IP from proxy headers |
 | `RateLimitAdapter` | `interface` | Adapter interface for custom storage backends |
 | `RateLimitConfig` | `interface` | Rate limit configuration (`windowMs`, `max`, `keyFn?`, `adapter?`) |
 | `RateLimitResult` | `interface` | Result of a rate limit check (`allowed`, `limit`, `remaining`, `resetAt`) |
